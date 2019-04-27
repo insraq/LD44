@@ -1,10 +1,9 @@
-import BindComponent from "./BindComponent";
 import { CardEntity } from "./CardData";
 
 const { ccclass, property } = cc._decorator;
 
 @ccclass
-export default class Card extends BindComponent {
+export default class Card extends cc.Component {
 
     @property(cc.Node)
     private level1: cc.Node = null;
