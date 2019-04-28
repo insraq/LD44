@@ -64,6 +64,7 @@ export default class Card extends cc.Component {
         // Level
         this.level = level;
 
+        this.level4.color = color;
         this.level3.color = color;
         this.level2.color = color;
         this.level1.color = color;

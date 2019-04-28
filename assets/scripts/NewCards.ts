@@ -38,7 +38,6 @@ export default class NewCards extends cc.Component {
     }
 
     private reroll({ free = false }) {
-        this.cards.removeAllChildren();
         if (!free) {
             if (CardDeck.getInstance().life <= 2) {
                 alert("You don't have enough lives");
@@ -46,6 +45,7 @@ export default class NewCards extends cc.Component {
             }
             CardDeck.getInstance().life -= 2;
         }
+        this.cards.removeAllChildren();
         this.placeholders.children.forEach((p) => {
             const node = cc.instantiate(this.cardPrefab);
             const c = node.getComponent(Card);

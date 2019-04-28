@@ -14,6 +14,30 @@ let _instance: CardDeck = null;
 
 @ccclass
 export default class CardDeck extends cc.Component {
+    public get unlockedSquad() {
+        return this._unlockedSquad;
+    }
+    public set unlockedSquad(value) {
+        this.setHoldingAreaLabel();
+        this.placeholders.children.forEach((node, i) => {
+            node.children[0].active = i >= value;
+        });
+        this._unlockedSquad = value;
+    }
+    public get life(): number {
+        return this._life;
+    }
+    public set life(value: number) {
+        this.lifeLabel.string = `Life: ${value}`;
+        this._life = value;
+    }
+    public get opponentLife(): number {
+        return this._opponentLife;
+    }
+    public set opponentLife(value: number) {
+        this.opponentLifeLabel.string = `Opponent's Life: ${value}`;
+        this._opponentLife = value;
+    }
 
     public static getInstance(): CardDeck {
         if (_instance === null) {
@@ -27,6 +51,8 @@ export default class CardDeck extends cc.Component {
     @property(cc.Node)
     public readonly dragToRemove: cc.Node = null;
 
+    public turnCount: number = 0;
+
     @property(cc.Node)
     private nextTurn: cc.Node = null;
 
@@ -34,34 +60,10 @@ export default class CardDeck extends cc.Component {
     private newCards: NewCards = null;
 
     private _unlockedSquad: number = 0;
-    public get unlockedSquad() {
-        return this._unlockedSquad;
-    }
-    public set unlockedSquad(value) {
-        this.setHoldingAreaLabel();
-        this.placeholders.children.forEach((node, i) => {
-            node.children[0].active = i >= value;
-        });
-        this._unlockedSquad = value;
-    }
 
     private _life: number = 100;
-    public get life(): number {
-        return this._life;
-    }
-    public set life(value: number) {
-        this.lifeLabel.string = `Life: ${value}`;
-        this._life = value;
-    }
 
     private _opponentLife: number = 100;
-    public get opponentLife(): number {
-        return this._opponentLife;
-    }
-    public set opponentLife(value: number) {
-        this.opponentLifeLabel.string = `Opponent's Life: ${value}`;
-        this._opponentLife = value;
-    }
 
     @property(cc.Prefab)
     private cardPrefab: cc.Prefab = null;
@@ -81,8 +83,6 @@ export default class CardDeck extends cc.Component {
     private lifeLabel: cc.Label = null;
     @property(cc.Label)
     private opponentLifeLabel: cc.Label = null;
-
-    private turnCount: number = 0;
 
     public moveToSquad(c: Card): boolean {
         if (this.squadNode.childrenCount >= this._unlockedSquad) {
@@ -193,6 +193,29 @@ export default class CardDeck extends cc.Component {
             }
         });
 
+        Object.keys(freq).forEach((k) => {
+            if (freq[k].length >= 3) {
+                freq[k].forEach((c) => {
+                    if (c.level >= 4) {
+                        return;
+                    }
+                    c.level++;
+                    c.playUpgradeAnimation(0);
+                });
+            }
+        });
+        Object.keys(opponentFreq).forEach((k) => {
+            if (opponentFreq[k].length >= 3) {
+                opponentFreq[k].forEach((c) => {
+                    if (c.level >= 4) {
+                        return;
+                    }
+                    c.level++;
+                    c.playUpgradeAnimation(0);
+                });
+            }
+        });
+
         this.opponentSquadNode.parent.active = true;
         this.squadNode.active = false;
 
@@ -217,17 +240,17 @@ export default class CardDeck extends cc.Component {
                 } else {
                     alert("It's a tie!");
                 }
-                if (this.opponentLife <= 0) {
-                    alert("You have won!");
-                    cc.director.loadScene("Main");
-                    return;
-                }
-                if (this.life <= 0) {
-                    alert("You have lost!");
-                    cc.director.loadScene("Main");
-                    return;
-                }
                 this.scheduleOnce(() => {
+                    if (this.opponentLife <= 0) {
+                        alert("You have won!");
+                        cc.director.loadScene("Main");
+                        return;
+                    }
+                    if (this.life <= 0) {
+                        alert("You have lost!");
+                        cc.director.loadScene("Main");
+                        return;
+                    }
                     this.newCards.openPanel({ freeReroll: true });
                 }, 0.5);
                 return;
@@ -236,11 +259,11 @@ export default class CardDeck extends cc.Component {
             const m = myCards[0];
             m.node.runAction(cc.sequence(
                 cc.moveTo(
-                    0.25,
+                    ANIMATION_TIME,
                     m.node.parent.convertToNodeSpaceAR(o.node.getWorldPosition()).sub(cc.v2(0, 50)),
                 ).easing(cc.easeInOut(3)),
                 cc.moveTo(
-                    0.25,
+                    ANIMATION_TIME,
                     m.node.position,
                 ).easing(cc.easeInOut(3)),
                 cc.callFunc(() => {
@@ -256,47 +279,37 @@ export default class CardDeck extends cc.Component {
                 }),
             ));
         };
-        Object.keys(freq).forEach((k) => {
-            if (freq[k].length >= 3) {
-                freq[k].forEach((c) => {
-                    c.level++;
-                    c.playUpgradeAnimation(0);
-                });
-            }
-        });
-        Object.keys(opponentFreq).forEach((k) => {
-            if (opponentFreq[k].length >= 3) {
-                opponentFreq[k].forEach((c) => {
-                    c.level++;
-                    c.playUpgradeAnimation(0);
-                });
-            }
-        });
-        this.schedule(callback, 1, cc.macro.REPEAT_FOREVER);
+        this.schedule(callback, ANIMATION_TIME * 3, cc.macro.REPEAT_FOREVER);
     }
 
     public mergeCards() {
-        const freq: { [k: string]: Card[] } = {};
-        this.squadNode.children.concat(this.holdingNode.children).forEach((n) => {
-            const c = n.getComponent(Card);
-            if (freq[c.card.color + c.card.pattern + c.level]) {
-                freq[c.card.color + c.card.pattern + c.level].push(c);
-            } else {
-                freq[c.card.color + c.card.pattern + c.level] = [c];
-            }
-        });
-        Object.keys(freq).forEach((k) => {
-            if (freq[k].length === 3) {
-                freq[k][0].level++;
-                freq[k][0].playUpgradeAnimation();
+        let isDirty = true;
+        while (isDirty) {
+            isDirty = false;
+            const freq: { [k: string]: Card[] } = {};
+            this.squadNode.children.concat(this.holdingNode.children).forEach((n) => {
+                const c = n.getComponent(Card);
+                if (freq[c.card.color + c.card.pattern + c.level]) {
+                    freq[c.card.color + c.card.pattern + c.level].push(c);
+                } else {
+                    freq[c.card.color + c.card.pattern + c.level] = [c];
+                }
+            });
+            Object.keys(freq).forEach((k) => {
+                if (freq[k].length >= 3 && freq[k][0].level < 4) {
+                    freq[k][0].level++;
+                    freq[k][0].playUpgradeAnimation();
 
-                freq[k][1].node.parent = this.node;
-                freq[k][1].node.destroy();
+                    freq[k][1].node.parent = this.node;
+                    freq[k][1].node.destroy();
 
-                freq[k][2].node.parent = this.node;
-                freq[k][2].node.destroy();
-            }
-        });
+                    freq[k][2].node.parent = this.node;
+                    freq[k][2].node.destroy();
+
+                    isDirty = true;
+                }
+            });
+        }
         this.rearrangeCards();
     }
 

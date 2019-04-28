@@ -12,7 +12,8 @@ export default class Placeholders extends cc.Component {
         this.node.children.forEach((c, i) => {
             c.on(cc.Node.EventType.TOUCH_START, (event: cc.Event.EventTouch) => {
                 if (i >= cd.unlockedSquad) {
-                    const cost = Math.floor(cd.life / 10);
+                    const calc = Math.pow(2, i - 1) - CardDeck.getInstance().turnCount;
+                    const cost = Math.max(2, calc);
                     if (cd.life <= cost) {
                         alert("You don't have enough lives");
                         return;
