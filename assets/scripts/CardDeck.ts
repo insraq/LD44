@@ -7,7 +7,7 @@ const { ccclass, property } = cc._decorator;
 
 const PADDING = 60;
 const NODE_WIDTH = 150;
-const ANIMATION_TIME = 0.25;
+export const ANIMATION_TIME = 0.25;
 const MAX_HOLDING = 6;
 
 let _instance: CardDeck = null;
@@ -59,7 +59,7 @@ export default class CardDeck extends cc.Component {
         return this._opponentLife;
     }
     public set opponentLife(value: number) {
-        this.opponentLifeLabel.string = `Life: ${value}`;
+        this.opponentLifeLabel.string = `Opponent's Life: ${value}`;
         this._opponentLife = value;
     }
 
@@ -95,6 +95,7 @@ export default class CardDeck extends cc.Component {
     public sell(c: Card): boolean {
         c.node.parent = this.node;
         c.node.destroy();
+        this.life += Math.pow(3, c.level - 1);
         this.rearrangeCards();
         return true;
     }
@@ -134,13 +135,14 @@ export default class CardDeck extends cc.Component {
             return;
         }
 
-        const opponentSquad = [
-            new CardType(Color[Object.keys(Color).randOne()], Pattern[Object.keys(Pattern).randOne()]),
-            new CardType(Color[Object.keys(Color).randOne()], Pattern[Object.keys(Pattern).randOne()]),
-            new CardType(Color[Object.keys(Color).randOne()], Pattern[Object.keys(Pattern).randOne()]),
-            new CardType(Color[Object.keys(Color).randOne()], Pattern[Object.keys(Pattern).randOne()]),
-            new CardType(Color[Object.keys(Color).randOne()], Pattern[Object.keys(Pattern).randOne()]),
-        ];
+        const opponentSquad = [];
+
+        for (let i = 0; i < this.squadNode.childrenCount; i++) {
+            opponentSquad.push(new CardType(
+                Color[Object.keys(Color).randOne()],
+                Pattern[Object.keys(Pattern).randOne()],
+            ));
+        }
 
         this.opponentSquadNode.removeAllChildren();
         opponentSquad.forEach((card, i) => {
@@ -156,7 +158,8 @@ export default class CardDeck extends cc.Component {
         this.squadNode.children.forEach((cloneFrom) => {
             const node = cc.instantiate(this.cardPrefab);
             const c = node.getComponent(Card);
-            c.build(cloneFrom.getComponent(Card).card);
+            const ccc = cloneFrom.getComponent(Card);
+            c.build(ccc.card, ccc.level);
             node.parent = this.squadNodeClone;
             node.position = cloneFrom.position;
         });
@@ -178,9 +181,11 @@ export default class CardDeck extends cc.Component {
                 this.squadNode.active = true;
                 if (diff > 0) {
                     alert(`You have killed opponent ${Math.abs(diff)} lives`);
-                } else {
+                } else if (diff < 0) {
                     alert(`You have lost ${Math.abs(diff)} lives`);
                     this.life += diff;
+                } else {
+                    alert(`It's a tie!`);
                 }
                 this.scheduleOnce(() => {
                     this.newCards.reroll({ free: true });
@@ -199,8 +204,9 @@ export default class CardDeck extends cc.Component {
                     m.node.position,
                 ).easing(cc.easeInOut(3)),
                 cc.callFunc(() => {
-                    m.level -= 1;
-                    o.level -= 1;
+                    const d = Math.min(m.level, o.level);
+                    m.level -= d;
+                    o.level -= d;
                     if (m.level <= 0) {
                         myCards.shift();
                     }
@@ -224,12 +230,33 @@ export default class CardDeck extends cc.Component {
     protected start() {
         this.unlockedSquad = 2;
         this.life = 100;
+        this.opponentLife = 100;
     }
     private setHoldingAreaLabel() {
         this.holdingAreaLabel.string = `Holding Area ${this.holdingNode.childrenCount}/${MAX_HOLDING}`;
     }
 
     private rearrangeCards() {
+        const freq: { [k: string]: Card[] } = {};
+        this.squadNode.children.concat(this.holdingNode.children).forEach((n) => {
+            const c = n.getComponent(Card);
+            if (freq[c.card.hash()]) {
+                freq[c.card.hash()].push(c);
+            } else {
+                freq[c.card.hash()] = [c];
+            }
+        });
+        Object.keys(freq).forEach((k) => {
+            if (freq[k].length === 3) {
+                freq[k][0].level++;
+
+                freq[k][1].node.parent = this.node;
+                freq[k][1].node.destroy();
+
+                freq[k][2].node.parent = this.node;
+                freq[k][2].node.destroy();
+            }
+        });
         this.rearrangeSquad();
         this.rearrangeHolding();
     }

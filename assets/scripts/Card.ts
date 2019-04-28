@@ -1,5 +1,5 @@
 import { CardType } from "./CardData";
-import CardDeck from "./CardDeck";
+import CardDeck, { ANIMATION_TIME } from "./CardDeck";
 
 const { ccclass, property } = cc._decorator;
 
@@ -11,14 +11,29 @@ export default class Card extends cc.Component {
 
     public set level(value: number) {
         this._level = value;
+        if (value >= 2) {
+            this.scheduleOnce(() => {
+                this.node.runAction(cc.sequence(
+                    cc.scaleTo(0.25, 1.1),
+                    cc.scaleTo(0.25, 1),
+                    cc.scaleTo(0.25, 1.1),
+                    cc.scaleTo(0.25, 1),
+                    cc.scaleTo(0.25, 1.1),
+                    cc.scaleTo(0.25, 1),
+                ));
+            }, ANIMATION_TIME);
+        }
         this.level1.active = this._level >= 1;
         this.level2.active = this._level >= 2;
         this.level3.active = this._level >= 3;
+        this.level4.active = this._level >= 4;
     }
 
     public card: CardType = null;
     public isNewCard: boolean = false;
     public isOpponentCard: boolean = false;
+
+    public rearrangeAction: cc.Action;
 
     @property(cc.Node)
     private level1: cc.Node = null;
@@ -26,6 +41,8 @@ export default class Card extends cc.Component {
     private level2: cc.Node = null;
     @property(cc.Node)
     private level3: cc.Node = null;
+    @property(cc.Node)
+    private level4: cc.Node = null;
     @property(cc.Sprite)
     private pattern: cc.Sprite = null;
     @property(cc.Node)
@@ -34,7 +51,7 @@ export default class Card extends cc.Component {
 
     private _level: number;
 
-    public build(card: CardType) {
+    public build(card: CardType, level = 1) {
         this.card = card;
         const color = cc.color().fromHEX(this.card.color);
         // Pattern
@@ -44,7 +61,7 @@ export default class Card extends cc.Component {
             this.pattern.node.color = color;
         });
         // Level
-        this.level = 1;
+        this.level = level;
 
         this.level3.color = color;
         this.level2.color = color;
