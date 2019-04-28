@@ -11,18 +11,6 @@ export default class Card extends cc.Component {
 
     public set level(value: number) {
         this._level = value;
-        if (value >= 2) {
-            this.scheduleOnce(() => {
-                this.node.runAction(cc.sequence(
-                    cc.scaleTo(0.25, 1.1),
-                    cc.scaleTo(0.25, 1),
-                    cc.scaleTo(0.25, 1.1),
-                    cc.scaleTo(0.25, 1),
-                    cc.scaleTo(0.25, 1.1),
-                    cc.scaleTo(0.25, 1),
-                ));
-            }, ANIMATION_TIME);
-        }
         this.level1.active = this._level >= 1;
         this.level2.active = this._level >= 2;
         this.level3.active = this._level >= 3;
@@ -50,6 +38,19 @@ export default class Card extends cc.Component {
     private previousPosition: cc.Vec2 = null;
 
     private _level: number;
+
+    public playUpgradeAnimation(delay: number = ANIMATION_TIME) {
+        this.scheduleOnce(() => {
+            this.node.runAction(cc.sequence(
+                cc.scaleTo(0.25, 1.1),
+                cc.scaleTo(0.25, 1),
+                cc.scaleTo(0.25, 1.1),
+                cc.scaleTo(0.25, 1),
+                cc.scaleTo(0.25, 1.1),
+                cc.scaleTo(0.25, 1),
+            ));
+        }, delay);
+    }
 
     public build(card: CardType, level = 1) {
         this.card = card;

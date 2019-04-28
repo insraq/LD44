@@ -22,19 +22,28 @@ export default class NewCards extends cc.Component {
     public closePanel() {
         CardDeck.getInstance().newCardPanelOpen = false;
         this.panel.active = false;
+        CardDeck.getInstance().mergeCards();
     }
 
     public openPanel({ freeReroll = false }) {
-        if (this.cards.childrenCount === 0) {
+        if (freeReroll) {
             this.reroll({ free: freeReroll });
         }
         CardDeck.getInstance().newCardPanelOpen = true;
         this.panel.active = true;
     }
 
-    public reroll({ free = false }) {
+    protected start() {
+        this.openPanel({ freeReroll: true });
+    }
+
+    private reroll({ free = false }) {
         this.cards.removeAllChildren();
         if (!free) {
+            if (CardDeck.getInstance().life <= 2) {
+                alert("You don't have enough lives");
+                return;
+            }
             CardDeck.getInstance().life -= 2;
         }
         this.placeholders.children.forEach((p) => {
@@ -45,9 +54,5 @@ export default class NewCards extends cc.Component {
             node.position = p.position;
             c.isNewCard = true;
         });
-    }
-
-    protected start() {
-        this.openPanel({ freeReroll: true });
     }
 }

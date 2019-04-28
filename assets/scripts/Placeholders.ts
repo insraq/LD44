@@ -13,6 +13,10 @@ export default class Placeholders extends cc.Component {
             c.on(cc.Node.EventType.TOUCH_START, (event: cc.Event.EventTouch) => {
                 if (i >= cd.unlockedSquad) {
                     const cost = Math.floor(cd.life / 10);
+                    if (cd.life <= cost) {
+                        alert("You don't have enough lives");
+                        return;
+                    }
                     if (confirm(`Unlock this slot with ${cost} lives?`)) {
                         cd.unlockedSquad++;
                         cd.life -= cost;

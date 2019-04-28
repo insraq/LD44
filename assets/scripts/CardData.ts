@@ -5,9 +5,6 @@ export class CardType {
         this.color = color;
         this.pattern = pattern;
     }
-    public hash() {
-        return this.color + ":" + this.pattern;
-    }
 }
 
 export enum Color {
