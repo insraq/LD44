@@ -1,5 +1,7 @@
 import Card from "./Card";
-import { CardEntity, Color, Pattern } from "./CardData";
+import { CardType, Color, Pattern } from "./CardData";
+import NewCards from "./NewCards";
+import Overlay from "./Overlay";
 
 const { ccclass, property } = cc._decorator;
 
@@ -20,18 +22,45 @@ export default class CardDeck extends cc.Component {
         return _instance;
     }
 
-    public readonly holding: CardEntity[] = [];
-    public readonly squad: CardEntity[] = [];
+    public newCardPanelOpen: boolean = false;
+
+    @property(cc.Node)
+    public readonly dragToRemove: cc.Node = null;
+
+    @property(cc.Node)
+    private nextTurn: cc.Node = null;
+
+    @property(NewCards)
+    private newCards: NewCards = null;
 
     private _unlockedSquad: number = 0;
     public get unlockedSquad() {
         return this._unlockedSquad;
     }
     public set unlockedSquad(value) {
+        this.setHoldingAreaLabel();
         this.placeholders.children.forEach((node, i) => {
             node.children[0].active = i >= value;
         });
         this._unlockedSquad = value;
+    }
+
+    private _life: number = 100;
+    public get life(): number {
+        return this._life;
+    }
+    public set life(value: number) {
+        this.lifeLabel.string = `Life: ${value}`;
+        this._life = value;
+    }
+
+    private _opponentLife: number = 100;
+    public get opponentLife(): number {
+        return this._opponentLife;
+    }
+    public set opponentLife(value: number) {
+        this.opponentLifeLabel.string = `Life: ${value}`;
+        this._opponentLife = value;
     }
 
     @property(cc.Prefab)
@@ -42,36 +71,150 @@ export default class CardDeck extends cc.Component {
     private holdingNode: cc.Node = null;
     @property(cc.Node)
     private squadNode: cc.Node = null;
+    @property(cc.Node)
+    private squadNodeClone: cc.Node = null;
+    @property(cc.Node)
+    private opponentSquadNode: cc.Node = null;
+    @property(cc.Label)
+    private holdingAreaLabel: cc.Label = null;
+    @property(cc.Label)
+    private lifeLabel: cc.Label = null;
+    @property(cc.Label)
+    private opponentLifeLabel: cc.Label = null;
 
     public moveToSquad(c: Card): boolean {
-        const index = this.holding.indexOf(c.card);
-        if (index === -1 || this.squad.length >= this._unlockedSquad) {
+        if (this.squadNode.childrenCount >= this._unlockedSquad) {
             return false;
         }
-        const cards = this.holding.splice(index, 1);
-        this.squad.push(cards[0]);
-
+        c.node.position = this.squadNode.convertToNodeSpaceAR(c.node.parent.convertToWorldSpaceAR(c.node.position));
         c.node.parent = this.squadNode;
-        c.node.position = this.squadNode.convertToNodeSpaceAR(this.holdingNode.convertToWorldSpaceAR(c.node.position));
-        c.node.runAction(cc.moveTo(ANIMATION_TIME, this.placeholders.children[this.squad.length - 1].position));
-
-        this.rearrangeHolding();
+        this.rearrangeCards();
         return true;
     }
 
+    public sell(c: Card): boolean {
+        c.node.parent = this.node;
+        c.node.destroy();
+        this.rearrangeCards();
+        return true;
+    }
+
+    public toggleNextTurn(showNextTurn) {
+        this.nextTurn.active = showNextTurn;
+        this.dragToRemove.active = !showNextTurn;
+    }
+
     public moveToHolding(c: Card): boolean {
-        const index = this.squad.indexOf(c.card);
-        if (index === -1 || this.holding.length >= MAX_HOLDING) {
+        if (this.holdingNode.childrenCount >= MAX_HOLDING) {
             return false;
         }
-
-        const cards = this.squad.splice(index, 1);
-        this.holding.push(cards[0]);
-
+        c.node.position = this.holdingNode.convertToNodeSpaceAR(c.node.parent.convertToWorldSpaceAR(c.node.position));
         c.node.parent = this.holdingNode;
-        c.node.position = this.holdingNode.convertToNodeSpaceAR(this.squadNode.convertToWorldSpaceAR(c.node.position));
-        this.rearrangeHolding();
+        this.rearrangeCards();
         return true;
+    }
+
+    public addToHolding(c: Card): boolean {
+        if (this.holdingNode.childrenCount >= MAX_HOLDING) {
+            alert("Holding area is full");
+            return false;
+        }
+        this.life -= 2;
+        c.node.position = this.holdingNode.convertToNodeSpaceAR(c.node.parent.convertToWorldSpaceAR(c.node.position));
+        c.node.parent = this.holdingNode;
+        c.isNewCard = false;
+        this.rearrangeCards();
+        return true;
+    }
+
+    public doNextTurn() {
+
+        if (this.squadNode.childrenCount < this.unlockedSquad) {
+            alert("Your have empty battle card slots, drag more cards from holding area");
+            return;
+        }
+
+        const opponentSquad = [
+            new CardType(Color[Object.keys(Color).randOne()], Pattern[Object.keys(Pattern).randOne()]),
+            new CardType(Color[Object.keys(Color).randOne()], Pattern[Object.keys(Pattern).randOne()]),
+            new CardType(Color[Object.keys(Color).randOne()], Pattern[Object.keys(Pattern).randOne()]),
+            new CardType(Color[Object.keys(Color).randOne()], Pattern[Object.keys(Pattern).randOne()]),
+            new CardType(Color[Object.keys(Color).randOne()], Pattern[Object.keys(Pattern).randOne()]),
+        ];
+
+        this.opponentSquadNode.removeAllChildren();
+        opponentSquad.forEach((card, i) => {
+            const node = cc.instantiate(this.cardPrefab);
+            const c = node.getComponent(Card);
+            c.build(card);
+            c.isOpponentCard = true;
+            node.parent = this.opponentSquadNode;
+            node.x = this.getCardX(opponentSquad.length, i);
+        });
+
+        this.squadNodeClone.removeAllChildren();
+        this.squadNode.children.forEach((cloneFrom) => {
+            const node = cc.instantiate(this.cardPrefab);
+            const c = node.getComponent(Card);
+            c.build(cloneFrom.getComponent(Card).card);
+            node.parent = this.squadNodeClone;
+            node.position = cloneFrom.position;
+        });
+
+        this.opponentSquadNode.parent.active = true;
+        this.squadNode.active = false;
+
+        const myCards = this.squadNodeClone.children.map((c) => c.getComponent(Card));
+        const opponentCards = this.opponentSquadNode.children.map((c) => c.getComponent(Card));
+
+        const callback = () => {
+            if (myCards.length <= 0 || opponentCards.length <= 0) {
+                this.unschedule(callback);
+                const myScore = myCards.reduce((prev, current) => prev += current.level, 0);
+                const opponentScore = opponentCards.reduce((prev, current) => prev += current.level, 0);
+                const diff = myScore - opponentScore;
+                this.opponentSquadNode.parent.active = false;
+                this.squadNodeClone.removeAllChildren();
+                this.squadNode.active = true;
+                if (diff > 0) {
+                    alert(`You have killed opponent ${Math.abs(diff)} lives`);
+                } else {
+                    alert(`You have lost ${Math.abs(diff)} lives`);
+                    this.life += diff;
+                }
+                this.scheduleOnce(() => {
+                    this.newCards.reroll({ free: true });
+                }, 0.5);
+                return;
+            }
+            const o = opponentCards[0];
+            const m = myCards[0];
+            m.node.runAction(cc.sequence(
+                cc.moveTo(
+                    0.25,
+                    m.node.parent.convertToNodeSpaceAR(o.node.getWorldPosition()).sub(cc.v2(0, 50)),
+                ).easing(cc.easeInOut(3)),
+                cc.moveTo(
+                    0.25,
+                    m.node.position,
+                ).easing(cc.easeInOut(3)),
+                cc.callFunc(() => {
+                    m.level -= 1;
+                    o.level -= 1;
+                    if (m.level <= 0) {
+                        myCards.shift();
+                    }
+                    if (o.level <= 0) {
+                        opponentCards.shift();
+                    }
+                }),
+            ));
+        };
+        this.schedule(callback, 1, cc.macro.REPEAT_FOREVER);
+    }
+
+    public turnInProgress(): boolean {
+        return this.opponentSquadNode.parent.active;
     }
 
     protected onLoad() {
@@ -79,34 +222,39 @@ export default class CardDeck extends cc.Component {
     }
 
     protected start() {
-        this.holding.push(new CardEntity(Color.Red, Pattern.Tree3));
-        this.holding.push(new CardEntity(Color.Black, Pattern.Tree2));
-        this.holding.push(new CardEntity(Color.Blue, Pattern.Tree1));
-        this.holding.push(new CardEntity(Color.Red, Pattern.Tree2));
-        this.holding.push(new CardEntity(Color.Green, Pattern.Tree3));
-        this.holding.push(new CardEntity(Color.Purple, Pattern.Tree1));
-
         this.unlockedSquad = 2;
+        this.life = 100;
+    }
+    private setHoldingAreaLabel() {
+        this.holdingAreaLabel.string = `Holding Area ${this.holdingNode.childrenCount}/${MAX_HOLDING}`;
+    }
 
-        this.holding.forEach((card) => {
-            const node = cc.instantiate(this.cardPrefab);
-            const c = node.getComponent(Card);
-            c.build(card);
-            node.parent = this.holdingNode;
-        });
-
+    private rearrangeCards() {
+        this.rearrangeSquad();
         this.rearrangeHolding();
     }
 
     private rearrangeHolding() {
+        this.setHoldingAreaLabel();
         this.holdingNode.children.forEach((card, i) => {
-            card.runAction(cc.moveTo(ANIMATION_TIME, this.getCardX(i), 0));
+            card.stopAllActions();
+            card.runAction(cc.moveTo(ANIMATION_TIME, this.getCardX(this.holdingNode.childrenCount, i), 0));
         });
     }
 
-    private getCardX(index: number) {
+    private rearrangeSquad() {
+        this.squadNode.children.forEach((card, i) => {
+            card.stopAllActions();
+            card.runAction(cc.moveTo(ANIMATION_TIME, this.placeholders.children[i].position));
+        });
+    }
+
+    private getCardX(total: number, index: number) {
         const w = cc.winSize.width - PADDING;
-        const dist = (w - this.holding.length * NODE_WIDTH) / (this.holding.length - 1);
+        if (total === 1) {
+            return NODE_WIDTH / 2 + PADDING / 2;
+        }
+        const dist = (w - total * NODE_WIDTH) / (total - 1);
         return PADDING / 2 + (dist + NODE_WIDTH) * index + NODE_WIDTH / 2;
     }
 

@@ -1,4 +1,4 @@
-import { CardEntity } from "./CardData";
+import { CardType } from "./CardData";
 import CardDeck from "./CardDeck";
 
 const { ccclass, property } = cc._decorator;
@@ -16,7 +16,9 @@ export default class Card extends cc.Component {
         this.level3.active = this._level >= 3;
     }
 
-    public card: CardEntity = null;
+    public card: CardType = null;
+    public isNewCard: boolean = false;
+    public isOpponentCard: boolean = false;
 
     @property(cc.Node)
     private level1: cc.Node = null;
@@ -32,7 +34,7 @@ export default class Card extends cc.Component {
 
     private _level: number;
 
-    public build(card: CardEntity) {
+    public build(card: CardType) {
         this.card = card;
         const color = cc.color().fromHEX(this.card.color);
         // Pattern
@@ -52,13 +54,40 @@ export default class Card extends cc.Component {
 
     protected start() {
         this.node.on(cc.Node.EventType.TOUCH_START, (event: cc.Event.EventTouch) => {
-            this.previousPosition = this.node.position;
+            if (this.isOpponentCard || CardDeck.getInstance().turnInProgress()) {
+                return;
+            }
+            if (this.isNewCard) {
+                if (!CardDeck.getInstance().newCardPanelOpen) {
+                    return;
+                }
+                CardDeck.getInstance().addToHolding(this);
+            } else {
+                if (CardDeck.getInstance().newCardPanelOpen) {
+                    return;
+                }
+                CardDeck.getInstance().toggleNextTurn(false);
+                this.previousPosition = this.node.position;
+            }
         });
         this.node.on(cc.Node.EventType.TOUCH_MOVE, (event: cc.Event.EventTouch) => {
+            if (CardDeck.getInstance().newCardPanelOpen || this.isNewCard ||
+                this.isOpponentCard || CardDeck.getInstance().turnInProgress()) {
+                return;
+            }
             this.node.position = this.node.parent.convertToNodeSpaceAR(event.getLocation());
         });
         this.node.on(cc.Node.EventType.TOUCH_END, (event: cc.Event.EventTouch) => {
-            if (this.node.position.y > this.previousPosition.y) {
+            if (CardDeck.getInstance().newCardPanelOpen || this.isNewCard ||
+                this.isOpponentCard || CardDeck.getInstance().turnInProgress()) {
+                return;
+            }
+            CardDeck.getInstance().toggleNextTurn(true);
+            const dtr = CardDeck.getInstance().dragToRemove;
+            const removeMinY = this.node.parent.convertToNodeSpaceAR(dtr.getWorldPosition()).y - dtr.height / 2;
+            if (this.node.position.y > removeMinY) {
+                CardDeck.getInstance().sell(this);
+            } else if (this.node.position.y > this.previousPosition.y) {
                 if (!CardDeck.getInstance().moveToSquad(this)) {
                     this.node.position = this.previousPosition;
                 }
